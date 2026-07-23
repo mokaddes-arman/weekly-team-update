@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "postinstall": "npx puppeteer install chrome"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

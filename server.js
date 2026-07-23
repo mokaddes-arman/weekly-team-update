@@ -453,7 +453,10 @@ app.post('/generate-report', async (req, res) => {
     const fileName = `report-${timestamp}-${result.lastInsertRowid}.pdf`;
     const outputPath = path.join(tempDir, fileName);
 
-    const browser = await puppeteer.launch({ headless: 'new' });
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process'],
+    });
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });
     await page.pdf({
