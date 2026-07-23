@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      :root {
+        --banner: #2e5077;
+        --info-row: #d9e4f0;
+        --blue: #1f5fa9;
+        --red: #c0392b;
+        --purple: #d9cce8;
+        --purple-text: #5b2c83;
+        --table-header: #3b6ea5;
+        --section-header: #2e5077;
+        --dark-red: #a93226;
+        --body: #111827;
+        --muted: #4b5563;
+      }
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        color: var(--body);
+        margin: 0;
+        padding: 0;
+        background: white;
+      }
+      .page {
+        padding: 40px 46px 24px;
+      }
+      .banner {
+        background: var(--banner);
+        color: white;
+        text-align: center;
+        padding: 14px 16px;
+        font-weight: 700;
+      }
+      .banner .line-1 { font-size: 20px; letter-spacing: 0.5px; text-transform: uppercase; }
+      .banner .line-2 { font-size: 13px; margin-top: 4px; font-weight: 400; }
+      .info-row {
+        background: var(--info-row);
+        padding: 6px 10px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--body);
+      }
+      .info-values {
+        padding: 10px 10px 12px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        font-size: 12px;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 14px;
+      }
+      .body-section { margin-bottom: 14px; font-size: 13px; line-height: 1.45; text-align: justify; }
+      .body-section .label { font-weight: 700; color: var(--banner); }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-weight: 700;
+        color: white;
+        margin-right: 5px;
+      }
+      .badge.important { background: var(--red); }
+      .badge.notes { background: var(--blue); }
+      .badge.announcement { background: var(--purple); color: var(--purple-text); }
+      .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
+      .section-header {
+        background: var(--section-header);
+        color: white;
+        padding: 8px 10px;
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        margin-top: 0;
+      }
+      .section-header.blue { background: var(--table-header); }
+      .section-header.red { background: var(--dark-red); }
+      .table-box { border: 1px solid #d1d5db; border-collapse: collapse; width: 100%; font-size: 12px; }
+      .table-box th, .table-box td { padding: 7px 8px; border: 1px solid #d1d5db; }
+      .table-box tr:nth-child(even) { background: #f3f4f6; }
+      .metric-label { font-weight: 500; }
+      .value-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+      .value-pill.blue { background: #dfefff; color: #1f5fa9; }
+      .value-pill.red { background: #fbe7e7; color: #c0392b; }
+      .value-pill.yellow { background: #fef3c7; color: #7c5b00; }
+      .value-pill.green { background: #e6f7ea; color: #2e7d32; }
+      .value-pill.gray { background: #f2f2f2; color: #6b7280; }
+      .resolution-table td:first-child { font-weight: 700; color: var(--blue); }
+      .collab-table th { background: var(--banner); color:white; }
+      .collab-table tr:nth-child(even) { background: #eef5fb; }
+      .next-week { padding: 10px 12px; border: 1px solid #d1d5db; font-size: 12px; }
+      .footnote { font-size: 10px; color: var(--muted); margin-top: 12px; }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="banner">
+        <div class="line-1">{{title_line_1}}</div>
+        <div class="line-2">{{title_line_2}}</div>
+      </div>
+
+      <div class="info-row">
+        <div>Prepared By</div>
+        <div>Project / Module</div>
+        <div>Report Date</div>
+        <div>Submitted To</div>
+      </div>
+      <div class="info-values">
+        <div>[ {{prepared_by}} ]</div>
+        <div>[ {{project_module}} ]</div>
+        <div>[ {{report_date}} ]</div>
+        <div>[ {{submitted_to_html}} ]</div>
+      </div>
+
+      <div class="body-section">{{summary_text}}</div>
+      <div class="body-section">{{important_text}}</div>
+      {{notes_section}}
+      {{announcement_section}}
+      <div class="body-section"><span class="label">Looking ahead,</span> {{next_week_text}}</div>
+
+      <div class="two-col">
+        <div>
+          <div class="section-header">1. ISSUE STATUS SUMMARY</div>
+          <table class="table-box">
+            <tbody>
+              <tr><td class="metric-label">Total Issues Reported</td><td><span class="value-pill blue">[ {{total_issues}} ]</span></td></tr>
+              <tr><td class="metric-label">Critical / High</td><td><span class="value-pill red">[ {{critical_high}} ]</span></td></tr>
+              <tr><td class="metric-label">In Progress</td><td><span class="value-pill yellow">[ {{in_progress}} ]</span></td></tr>
+              <tr><td class="metric-label">Resolved This Week</td><td><span class="value-pill green">[ {{resolved}} ]</span></td></tr>
+              <tr><td class="metric-label">Pending</td><td><span class="value-pill gray">[ {{pending}} ]</span></td></tr>
+            </tbody>
+          </table>
+
+          <div class="section-header" style="margin-top:12px;">2. AVG. RESOLUTION TIME</div>
+          <table class="table-box resolution-table">
+            <tbody>
+              <tr><td>Critical</td><td>[{{avg_res_critical_hrs}}] hrs</td></tr>
+              <tr><td>High</td><td>[{{avg_res_high_hrs}}] hrs</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <div class="section-header blue">3. COLLABORATION FEEDBACK</div>
+          <table class="table-box collab-table">
+            <thead>
+              <tr><th>Area</th><th>Rating</th><th>SLA</th></tr>
+            </thead>
+            <tbody>
+              {{collaboration_rows}}
+            </tbody>
+          </table>
+
+          <div class="section-header red" style="margin-top:12px;">6. PLAN FOR NEXT WEEK</div>
+          <div class="next-week">[ Testing focus: {{next_week_text}} ]</div>
+        </div>
+      </div>
+
+      <div class="footnote">**Resolved this week: Sum of previously reported fixed issues count and this week's fixed issues count.</div>
+    </div>
+  </body>
+</html>

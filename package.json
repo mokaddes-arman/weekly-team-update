@@ -1,0 +1,16 @@
+{
+  "name": "sqa-weekly-report-app",
+  "version": "1.0.0",
+  "description": "Local web app for generating SQA weekly reports and tracking monthly metrics",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.9.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.2",
+    "puppeteer": "^24.0.0"
+  }
+}

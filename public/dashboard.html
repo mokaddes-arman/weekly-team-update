@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monthly Dashboard</title>
+    <style>
+      :root { --navy:#2e5077; --blue:#3b6ea5; --bg:#f5f7fb; --text:#1d2330; }
+      body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
+      .container { max-width: 1200px; margin:0 auto; padding:24px; }
+      .card { background:white; border-radius:12px; padding:20px; box-shadow:0 10px 25px rgba(0,0,0,0.05); margin-bottom: 20px; }
+      h1, h2 { color:var(--navy); }
+      table { width:100%; border-collapse:collapse; margin-top:12px; }
+      th, td { border:1px solid #d9e2ec; padding:10px; text-align:left; }
+      th { background:var(--navy); color:white; }
+      .muted { color:#667085; }
+      .chart-wrap { height:320px; }
+      .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#e7f0ff; color:var(--blue); font-weight:700; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <a href="/">Back to Report Generator</a>
+        <h1>Monthly Dashboard</h1>
+        <p class="muted">Historical weekly metrics from the local SQLite database.</p>
+      </div>
+      <div class="card">
+        <h2>Monthly Rollup</h2>
+        <div id="rollup"></div>
+      </div>
+      <div class="card">
+        <h2>Weekly History</h2>
+        <div id="table"></div>
+      </div>
+      <div class="card">
+        <h2>Trend Chart</h2>
+        <div class="chart-wrap"><canvas id="chart"></canvas></div>
+      </div>
+    </div>
+
+    <script>
+      async function loadDashboard() {
+        const response = await fetch('/api/dashboard');
+        const data = await response.json();
+
+        const rollup = document.getElementById('rollup');
+        rollup.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Month</th><th>Resolved This Month</th><th>Latest Pending</th></tr>
+            </thead>
+            <tbody>
+              ${data.monthly_rollup.map((item) => `<tr><td>${item.month}</td><td>${item.resolved}</td><td>${item.pending}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        `;
+
+        const table = document.getElementById('table');
+        table.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Report Date</th><th>Total Issues</th><th>Critical/High</th><th>In Progress</th><th>Resolved</th><th>Pending</th></tr>
+            </thead>
+            <tbody>
+              ${data.rows.map((row) => `<tr><td>${row.report_date}</td><td>${row.total_issues ?? 0}</td><td>${row.critical_high ?? 0}</td><td>${row.in_progress ?? 0}</td><td>${row.resolved ?? 0}</td><td>${row.pending ?? 0}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        `;
+
+        const labels = data.rows.map((row) => row.report_date);
+        const totalIssues = data.rows.map((row) => row.total_issues || 0);
+        const resolved = data.rows.map((row) => row.resolved || 0);
+        const pending = data.rows.map((row) => row.pending || 0);
+
+        new Chart(document.getElementById('chart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Total Issues', data: totalIssues, borderColor: '#2e5077', backgroundColor: 'rgba(46,80,119,0.15)', tension: 0.35 },
+              { label: 'Resolved', data: resolved, borderColor: '#2e8b57', backgroundColor: 'rgba(46,139,87,0.15)', tension: 0.35 },
+              { label: 'Pending', data: pending, borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,0.15)', tension: 0.35 },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } },
+          },
+        });
+      }
+
+      loadDashboard();
+    </script>
+  </body>
+</html>
