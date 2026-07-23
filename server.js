@@ -96,7 +96,67 @@ function getPuppeteerExecutablePath() {
   }
 
   const defaultPath = puppeteer.executablePath();
-  return fs.existsSync(defaultPath) ? defaultPath : null;
+  if (defaultPath && fs.existsSync(defaultPath)) {
+    return defaultPath;
+  }
+
+  const candidates = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/headless-chromium',
+    '/opt/render/.cache/puppeteer',
+    '/opt/render/.local-chromium',
+    '/opt/render/.local-chromium/linux-*/chrome-linux/chrome',
+    '/opt/render/.cache/puppeteer/chrome',
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return candidate;
+    }
+  }
+
+  const searchDirs = [
+    '/opt/render/.cache/puppeteer',
+    '/opt/render/.local-chromium',
+    '/usr/bin',
+    '/usr/local/bin',
+  ];
+
+  for (const dir of searchDirs) {
+    const found = findExecutableRecursive(dir, ['chrome', 'chromium', 'headless-chromium']);
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+function findExecutableRecursive(dir, names) {
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const found = findExecutableRecursive(fullPath, names);
+        if (found) {
+          return found;
+        }
+      } else if (entry.isFile()) {
+        const base = path.basename(fullPath).toLowerCase();
+        if (names.includes(base) || names.some((name) => base.includes(name))) {
+          return fullPath;
+        }
+      }
+    }
+  } catch (err) {
+    return null;
+  }
+
+  return null;
 }
 
 function escapeHtml(value) {
