@@ -4,9 +4,12 @@ const fs = require('fs');
 const { createClient } = require('@libsql/client');
 const Database = require('better-sqlite3');
 const dotenv = require('dotenv');
-const puppeteer = require('puppeteer');
+
+process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || '/opt/render/.cache/puppeteer';
+process.env.PUPPETEER_SKIP_DOWNLOAD = process.env.PUPPETEER_SKIP_DOWNLOAD || 'false';
 
 dotenv.config({ path: path.join(__dirname, '.env') });
+const puppeteer = require('puppeteer');
 
 // Gemini configuration (model and API key loaded from environment)
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || null;
@@ -82,6 +85,34 @@ function formatDate(dateString) {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return dateString;
   return `${String(date.getDate()).padStart(2, '0')} ${String(date.getMonth() + 1).padStart(2, '0')} ${date.getFullYear()}`;
+}
+
+function getPuppeteerExecutablePath() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+
+  const possiblePaths = [
+    '/opt/render/.local-chromium',
+    '/opt/render/.local-chromium/chrome-linux/chrome',
+    '/opt/render/.local-chromium/linux-*/chrome-linux/chrome',
+    '/opt/render/.cache/puppeteer/chrome/linux-*/chrome-linux/chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+  ];
+
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  return null;
 }
 
 function escapeHtml(value) {
@@ -453,9 +484,11 @@ app.post('/generate-report', async (req, res) => {
     const fileName = `report-${timestamp}-${result.lastInsertRowid}.pdf`;
     const outputPath = path.join(tempDir, fileName);
 
+    const executablePath = getPuppeteerExecutablePath();
     const browser = await puppeteer.launch({
       headless: 'new',
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process'],
+      ...(executablePath ? { executablePath } : {}),
     });
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });
