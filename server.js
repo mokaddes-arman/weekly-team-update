@@ -493,6 +493,10 @@ app.get('/download/:fileName', (req, res) => {
   });
 });
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime() });
+});
+
 app.listen(port, () => {
   console.log(`SQA report app running at http://localhost:${port}`);
 });
