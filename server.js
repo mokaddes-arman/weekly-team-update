@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { createClient } = require('@libsql/client');
 const Database = require('better-sqlite3');
 const dotenv = require('dotenv');
 const puppeteer = require('puppeteer');
@@ -14,6 +15,10 @@ const GEMINI_FALLBACK_MODELS = process.env.GEMINI_FALLBACK_MODELS
   ? process.env.GEMINI_FALLBACK_MODELS.split(',').map(s => s.trim()).filter(Boolean)
   : ['models/gemini-2.5-flash-lite', 'models/gemini-3.5-flash-lite'];
 
+const TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL || null;
+const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN || null;
+const useTurso = Boolean(TURSO_DATABASE_URL && TURSO_AUTH_TOKEN);
+
 const app = express();
 const port = process.env.PORT || 3000;
 const projectRoot = __dirname;
@@ -26,23 +31,39 @@ if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
 
-const db = new Database(dbPath);
-db.exec(`
-  CREATE TABLE IF NOT EXISTS weekly_metrics (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    report_date TEXT NOT NULL,
-    prepared_by TEXT,
-    project_module TEXT,
-    total_issues INTEGER,
-    critical_high INTEGER,
-    in_progress INTEGER,
-    resolved INTEGER,
-    pending INTEGER,
-    avg_res_critical_hrs REAL,
-    avg_res_high_hrs REAL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-  );
-`);
+const db = useTurso
+  ? createClient({ url: TURSO_DATABASE_URL, authToken: TURSO_AUTH_TOKEN })
+  : new Database(dbPath);
+
+const initDatabase = async () => {
+  const createTableSql = `
+    CREATE TABLE IF NOT EXISTS weekly_metrics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      report_date TEXT NOT NULL,
+      prepared_by TEXT,
+      project_module TEXT,
+      total_issues INTEGER,
+      critical_high INTEGER,
+      in_progress INTEGER,
+      resolved INTEGER,
+      pending INTEGER,
+      avg_res_critical_hrs REAL,
+      avg_res_high_hrs REAL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+
+  if (useTurso) {
+    await db.execute({ sql: createTableSql });
+  } else {
+    db.exec(createTableSql);
+  }
+};
+
+initDatabase().catch((err) => {
+  console.error('Database initialization failed:', err);
+  process.exit(1);
+});
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -200,6 +221,57 @@ function renderTemplate(payload) {
   return html;
 }
 
+async function fetchWeeklyMetrics() {
+  if (useTurso) {
+    const result = await db.execute({ sql: 'SELECT * FROM weekly_metrics ORDER BY report_date ASC' });
+    return Array.isArray(result.rows) ? result.rows : [];
+  }
+  return db.prepare('SELECT * FROM weekly_metrics ORDER BY report_date ASC').all();
+}
+
+async function insertWeeklyMetric(payload) {
+  if (useTurso) {
+    const result = await db.execute({
+      sql: `INSERT INTO weekly_metrics (
+        report_date, prepared_by, project_module, total_issues, critical_high,
+        in_progress, resolved, pending, avg_res_critical_hrs, avg_res_high_hrs
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+      args: [
+        payload.report_date,
+        payload.prepared_by || null,
+        payload.project_module || null,
+        parseNumber(payload.total_issues),
+        parseNumber(payload.critical_high),
+        parseNumber(payload.in_progress),
+        parseNumber(payload.resolved),
+        parseNumber(payload.pending),
+        parseNumber(payload.avg_res_critical_hrs),
+        parseNumber(payload.avg_res_high_hrs),
+      ],
+    });
+    return { lastInsertRowid: Number(result.lastInsertRowid || 0n) };
+  }
+
+  const insert = db.prepare(`
+      INSERT INTO weekly_metrics (
+        report_date, prepared_by, project_module, total_issues, critical_high,
+        in_progress, resolved, pending, avg_res_critical_hrs, avg_res_high_hrs
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+  return insert.run(
+    payload.report_date,
+    payload.prepared_by || null,
+    payload.project_module || null,
+    parseNumber(payload.total_issues),
+    parseNumber(payload.critical_high),
+    parseNumber(payload.in_progress),
+    parseNumber(payload.resolved),
+    parseNumber(payload.pending),
+    parseNumber(payload.avg_res_critical_hrs),
+    parseNumber(payload.avg_res_high_hrs)
+  );
+}
+
 async function generateAiNarrative(payload) {
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY not configured. Set GEMINI_API_KEY in your .env to enable AI rewriting.');
@@ -321,28 +393,33 @@ app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(publicDir, 'dashboard.html'));
 });
 
-app.get('/api/dashboard', (req, res) => {
-  const rows = db.prepare('SELECT * FROM weekly_metrics ORDER BY report_date ASC').all();
-  const months = new Map();
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const rows = await fetchWeeklyMetrics();
+    const months = new Map();
 
-  rows.forEach((row) => {
-    const monthKey = row.report_date.slice(0, 7);
-    const bucket = months.get(monthKey) || { month: monthKey, resolved: 0, pending: row.pending ?? 0, weeks: [] };
-    bucket.resolved += row.resolved || 0;
-    bucket.pending = row.pending ?? bucket.pending;
-    bucket.weeks.push({
-      report_date: row.report_date,
-      total_issues: row.total_issues || 0,
-      resolved: row.resolved || 0,
-      pending: row.pending || 0,
+    rows.forEach((row) => {
+      const monthKey = String(row.report_date).slice(0, 7);
+      const bucket = months.get(monthKey) || { month: monthKey, resolved: 0, pending: row.pending ?? 0, weeks: [] };
+      bucket.resolved += row.resolved || 0;
+      bucket.pending = row.pending ?? bucket.pending;
+      bucket.weeks.push({
+        report_date: row.report_date,
+        total_issues: row.total_issues || 0,
+        resolved: row.resolved || 0,
+        pending: row.pending || 0,
+      });
+      months.set(monthKey, bucket);
     });
-    months.set(monthKey, bucket);
-  });
 
-  res.json({
-    rows,
-    monthly_rollup: Array.from(months.values()),
-  });
+    res.json({
+      rows,
+      monthly_rollup: Array.from(months.values()),
+    });
+  } catch (error) {
+    console.error('Dashboard query failed:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch dashboard metrics.' });
+  }
 });
 
 app.post('/generate-report', async (req, res) => {
@@ -368,24 +445,7 @@ app.post('/generate-report', async (req, res) => {
       }
     }
 
-    const insert = db.prepare(`
-      INSERT INTO weekly_metrics (
-        report_date, prepared_by, project_module, total_issues, critical_high,
-        in_progress, resolved, pending, avg_res_critical_hrs, avg_res_high_hrs
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    const result = insert.run(
-      payload.report_date,
-      payload.prepared_by || null,
-      payload.project_module || null,
-      parseNumber(payload.total_issues),
-      parseNumber(payload.critical_high),
-      parseNumber(payload.in_progress),
-      parseNumber(payload.resolved),
-      parseNumber(payload.pending),
-      parseNumber(payload.avg_res_critical_hrs),
-      parseNumber(payload.avg_res_high_hrs)
-    );
+    const result = await insertWeeklyMetric(payload);
 
     const html = renderTemplate(payload);
 
