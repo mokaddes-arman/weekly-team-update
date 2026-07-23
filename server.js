@@ -8,6 +8,8 @@ const dotenv = require('dotenv');
 process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || '/opt/render/.cache/puppeteer';
 process.env.PUPPETEER_SKIP_DOWNLOAD = process.env.PUPPETEER_SKIP_DOWNLOAD || 'false';
 
+fs.mkdirSync(process.env.PUPPETEER_CACHE_DIR, { recursive: true });
+
 dotenv.config({ path: path.join(__dirname, '.env') });
 const puppeteer = require('puppeteer');
 
@@ -89,30 +91,12 @@ function formatDate(dateString) {
 
 function getPuppeteerExecutablePath() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    return process.env.PUPPETEER_EXECUTABLE_PATH;
+    const customPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    return fs.existsSync(customPath) ? customPath : null;
   }
 
-  const possiblePaths = [
-    '/opt/render/.local-chromium',
-    '/opt/render/.local-chromium/chrome-linux/chrome',
-    '/opt/render/.local-chromium/linux-*/chrome-linux/chrome',
-    '/opt/render/.cache/puppeteer/chrome/linux-*/chrome-linux/chrome',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/chromium',
-  ];
-
-  for (const p of possiblePaths) {
-    try {
-      if (fs.existsSync(p)) {
-        return p;
-      }
-    } catch (err) {
-      // ignore
-    }
-  }
-
-  return null;
+  const defaultPath = puppeteer.executablePath();
+  return fs.existsSync(defaultPath) ? defaultPath : null;
 }
 
 function escapeHtml(value) {
