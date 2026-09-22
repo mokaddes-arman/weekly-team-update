@@ -5,26 +5,85 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Monthly Dashboard</title>
     <style>
-      :root { --navy:#2e5077; --blue:#3b6ea5; --bg:#f5f7fb; --text:#1d2330; }
-      body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text); }
-      .container { max-width: 1200px; margin:0 auto; padding:24px; }
-      .card { background:white; border-radius:12px; padding:20px; box-shadow:0 10px 25px rgba(0,0,0,0.05); margin-bottom: 20px; }
-      h1, h2 { color:var(--navy); }
-      table { width:100%; border-collapse:collapse; margin-top:12px; }
-      th, td { border:1px solid #d9e2ec; padding:10px; text-align:left; }
-      th { background:var(--navy); color:white; }
-      .muted { color:#667085; }
-      .chart-wrap { height:320px; }
-      .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#e7f0ff; color:var(--blue); font-weight:700; }
+      :root {
+        --ink: #0B1220;
+        --panel: #121B2E;
+        --panel-border: #1E293F;
+        --text: #E6EDF3;
+        --muted: #8592A6;
+        --amber: #FFB020;
+        --teal: #2BD9B9;
+        --red: #FF5C5C;
+      }
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: var(--ink);
+        color: var(--text);
+      }
+      .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+        margin-bottom: 20px;
+      }
+      h1, h2 { color: var(--teal); margin-top: 0; }
+      a.back-link {
+        display: inline-block;
+        color: var(--amber);
+        font-weight: 700;
+        text-decoration: none;
+        margin-bottom: 12px;
+      }
+      a.back-link:hover { text-decoration: underline; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { border: 1px solid var(--panel-border); padding: 10px; text-align: left; }
+      th { background: var(--ink); color: var(--teal); }
+      td { color: var(--text); }
+      tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+      .muted { color: var(--muted); }
+      .chart-wrap { height: 320px; }
+      .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; background: rgba(43,217,185,0.12); color: var(--teal); font-weight: 700; }
+      .status-banner {
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-top: 12px;
+        font-weight: 600;
+      }
+      .status-banner.error { background: rgba(255,92,92,0.12); color: var(--red); border: 1px solid rgba(255,92,92,0.35); }
+      .status-banner.loading { background: rgba(255,176,32,0.10); color: var(--amber); border: 1px solid rgba(255,176,32,0.3); }
+      .status-banner.empty { background: rgba(133,146,166,0.10); color: var(--muted); border: 1px solid var(--panel-border); }
+      .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 14px;
+      }
+      .pagination button {
+        background: transparent;
+        border: 1px solid var(--panel-border);
+        color: var(--text);
+        border-radius: 6px;
+        padding: 6px 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .pagination button:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
+      .pagination button:disabled { opacity: 0.35; cursor: not-allowed; }
+      .pagination .page-info { color: var(--muted); font-weight: 600; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
     <div class="container">
       <div class="card">
-        <a href="/">Back to Report Generator</a>
+        <a class="back-link" href="/">← Back to Report Generator</a>
         <h1>Monthly Dashboard</h1>
-        <p class="muted">Historical weekly metrics from the local SQLite database.</p>
+        <p class="muted">Historical weekly metrics</p>
       </div>
       <div class="card">
         <h2>Monthly Rollup</h2>
@@ -33,6 +92,7 @@
       <div class="card">
         <h2>Weekly History</h2>
         <div id="table"></div>
+        <div id="table-pagination"></div>
       </div>
       <div class="card">
         <h2>Trend Chart</h2>
@@ -41,53 +101,130 @@
     </div>
 
     <script>
-      async function loadDashboard() {
-        const response = await fetch('/api/dashboard');
-        const data = await response.json();
+      const rollupEl = document.getElementById('rollup');
+      const tableEl = document.getElementById('table');
+      const paginationEl = document.getElementById('table-pagination');
+      const PAGE_SIZE = 10;
 
-        const rollup = document.getElementById('rollup');
-        rollup.innerHTML = `
-          <table>
-            <thead>
-              <tr><th>Month</th><th>Resolved This Month</th><th>Latest Pending</th></tr>
-            </thead>
-            <tbody>
-              ${data.monthly_rollup.map((item) => `<tr><td>${item.month}</td><td>${item.resolved}</td><td>${item.pending}</td></tr>`).join('')}
-            </tbody>
-          </table>
-        `;
+      let allRows = [];
+      let currentPage = 1;
 
-        const table = document.getElementById('table');
-        table.innerHTML = `
+      function showBanner(el, message, type) {
+        el.innerHTML = `<div class="status-banner ${type}">${message}</div>`;
+      }
+
+      function renderWeeklyTable() {
+        const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
+        currentPage = Math.min(currentPage, totalPages);
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const pageRows = allRows.slice(start, start + PAGE_SIZE);
+
+        tableEl.innerHTML = `
           <table>
             <thead>
               <tr><th>Report Date</th><th>Total Issues</th><th>Critical/High</th><th>In Progress</th><th>Resolved</th><th>Pending</th></tr>
             </thead>
             <tbody>
-              ${data.rows.map((row) => `<tr><td>${row.report_date}</td><td>${row.total_issues ?? 0}</td><td>${row.critical_high ?? 0}</td><td>${row.in_progress ?? 0}</td><td>${row.resolved ?? 0}</td><td>${row.pending ?? 0}</td></tr>`).join('')}
+              ${pageRows.map((row) => `<tr><td>${row.report_date}</td><td>${row.total_issues ?? 0}</td><td>${row.critical_high ?? 0}</td><td>${row.in_progress ?? 0}</td><td>${row.resolved ?? 0}</td><td>${row.pending ?? 0}</td></tr>`).join('')}
             </tbody>
           </table>
         `;
 
-        const labels = data.rows.map((row) => row.report_date);
-        const totalIssues = data.rows.map((row) => row.total_issues || 0);
-        const resolved = data.rows.map((row) => row.resolved || 0);
-        const pending = data.rows.map((row) => row.pending || 0);
+        paginationEl.innerHTML = `
+          <div class="pagination">
+            <span class="page-info">Page ${currentPage} of ${totalPages} (${allRows.length} reports)</span>
+            <button id="prev-page" ${currentPage <= 1 ? 'disabled' : ''}>Previous</button>
+            <button id="next-page" ${currentPage >= totalPages ? 'disabled' : ''}>Next</button>
+          </div>
+        `;
+
+        document.getElementById('prev-page').addEventListener('click', () => {
+          if (currentPage > 1) {
+            currentPage -= 1;
+            renderWeeklyTable();
+          }
+        });
+        document.getElementById('next-page').addEventListener('click', () => {
+          if (currentPage < totalPages) {
+            currentPage += 1;
+            renderWeeklyTable();
+          }
+        });
+      }
+
+      async function loadDashboard() {
+        showBanner(rollupEl, 'Loading monthly rollup…', 'loading');
+        showBanner(tableEl, 'Loading weekly history…', 'loading');
+        paginationEl.innerHTML = '';
+
+        let data;
+        try {
+          const response = await fetch('/api/dashboard');
+          if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+          }
+          data = await response.json();
+        } catch (error) {
+          const message = `Failed to load dashboard data: ${error.message}`;
+          showBanner(rollupEl, message, 'error');
+          showBanner(tableEl, message, 'error');
+          return;
+        }
+
+        if (!data.monthly_rollup || data.monthly_rollup.length === 0) {
+          showBanner(rollupEl, 'No monthly data yet. Generate a report to get started.', 'empty');
+        } else {
+          rollupEl.innerHTML = `
+            <table>
+              <thead>
+                <tr><th>Month</th><th>Resolved This Month</th><th>Latest Pending</th></tr>
+              </thead>
+              <tbody>
+                ${data.monthly_rollup.map((item) => `<tr><td>${item.month}</td><td>${item.resolved}</td><td>${item.pending}</td></tr>`).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+
+        allRows = data.rows || [];
+
+        if (allRows.length === 0) {
+          showBanner(tableEl, 'No weekly reports recorded yet.', 'empty');
+          paginationEl.innerHTML = '';
+          return;
+        }
+
+        // Most-recent-first makes more sense for a paginated history view.
+        allRows = [...allRows].reverse();
+        currentPage = 1;
+        renderWeeklyTable();
+
+        const chartRows = data.rows;
+        const labels = chartRows.map((row) => row.report_date);
+        const totalIssues = chartRows.map((row) => row.total_issues || 0);
+        const resolved = chartRows.map((row) => row.resolved || 0);
+        const pending = chartRows.map((row) => row.pending || 0);
 
         new Chart(document.getElementById('chart'), {
           type: 'line',
           data: {
             labels,
             datasets: [
-              { label: 'Total Issues', data: totalIssues, borderColor: '#2e5077', backgroundColor: 'rgba(46,80,119,0.15)', tension: 0.35 },
-              { label: 'Resolved', data: resolved, borderColor: '#2e8b57', backgroundColor: 'rgba(46,139,87,0.15)', tension: 0.35 },
-              { label: 'Pending', data: pending, borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,0.15)', tension: 0.35 },
+              { label: 'Total Issues', data: totalIssues, borderColor: '#5B7290', backgroundColor: 'rgba(91,114,144,0.15)', tension: 0.35 },
+              { label: 'Resolved', data: resolved, borderColor: '#2BD9B9', backgroundColor: 'rgba(43,217,185,0.15)', tension: 0.35 },
+              { label: 'Pending', data: pending, borderColor: '#FFB020', backgroundColor: 'rgba(255,176,32,0.15)', tension: 0.35 },
             ],
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true } },
+            scales: {
+              y: { beginAtZero: true, ticks: { color: '#8592A6' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+              x: { ticks: { color: '#8592A6' }, grid: { color: 'rgba(255,255,255,0.06)' } },
+            },
+            plugins: {
+              legend: { labels: { color: '#E6EDF3' } },
+            },
           },
         });
       }
