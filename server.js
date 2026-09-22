@@ -1,24 +1,33 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { createClient } = require('@libsql/client');
 const Database = require('better-sqlite3');
 const dotenv = require('dotenv');
 
-process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || '/opt/render/.cache/puppeteer';
+const localPuppeteerCacheDir = path.join(__dirname, '.puppeteer-cache');
+const fallbackPuppeteerCacheDir = path.join(os.tmpdir(), 'weekly-report-puppeteer-cache');
+
+process.env.PUPPETEER_CACHE_DIR = process.env.PUPPETEER_CACHE_DIR || localPuppeteerCacheDir;
 process.env.PUPPETEER_SKIP_DOWNLOAD = process.env.PUPPETEER_SKIP_DOWNLOAD || 'false';
 
-fs.mkdirSync(process.env.PUPPETEER_CACHE_DIR, { recursive: true });
+try {
+  fs.mkdirSync(process.env.PUPPETEER_CACHE_DIR, { recursive: true });
+} catch (err) {
+  process.env.PUPPETEER_CACHE_DIR = fallbackPuppeteerCacheDir;
+  fs.mkdirSync(process.env.PUPPETEER_CACHE_DIR, { recursive: true });
+}
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 const puppeteer = require('puppeteer');
 
 // OpenRouter configuration (model and API key loaded from environment)
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY || null;
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || process.env.GEMINI_MODEL || 'openai/gpt-4o-mini';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || null;
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 const OPENROUTER_FALLBACK_MODELS = process.env.OPENROUTER_FALLBACK_MODELS
   ? process.env.OPENROUTER_FALLBACK_MODELS.split(',').map(s => s.trim()).filter(Boolean)
-  : (process.env.GEMINI_FALLBACK_MODELS || 'openai/gpt-4o-mini,deepseek/deepseek-chat-v3.1').split(',').map(s => s.trim()).filter(Boolean);
+  : ['openai/gpt-4o-mini', 'deepseek/deepseek-chat-v3.1'];
 
 const TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL || null;
 const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN || null;
@@ -378,7 +387,6 @@ async function generateAiNarrative(payload) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'http://localhost:3000',
         'X-Title': 'Weekly Report App',
       },
       body: JSON.stringify(body),
@@ -486,8 +494,8 @@ app.post('/generate-report', async (req, res) => {
     if (validationErrors.length > 0) {
       return res.status(400).json({ success: false, error: validationErrors.join(' ') });
     }
-    // If GEMINI_API_KEY is configured, attempt to rewrite the textual sections using Gemini
-    if (GEMINI_API_KEY) {
+    // If OpenRouter is configured, attempt to rewrite the textual sections using the configured model.
+    if (OPENROUTER_API_KEY) {
       try {
         const aiRewrite = await generateAiNarrative(payload);
         // Merge AI rewritten fields into the payload used for rendering
@@ -560,5 +568,5 @@ app.get('/health', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`SQA report app running at http://localhost:${port}`);
+  console.log(`SQA report app running on port ${port}`);
 });
