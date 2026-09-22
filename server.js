@@ -13,12 +13,12 @@ fs.mkdirSync(process.env.PUPPETEER_CACHE_DIR, { recursive: true });
 dotenv.config({ path: path.join(__dirname, '.env') });
 const puppeteer = require('puppeteer');
 
-// Gemini configuration (model and API key loaded from environment)
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || null;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'models/gemini-2.5-flash-lite';
-const GEMINI_FALLBACK_MODELS = process.env.GEMINI_FALLBACK_MODELS
-  ? process.env.GEMINI_FALLBACK_MODELS.split(',').map(s => s.trim()).filter(Boolean)
-  : ['models/gemini-2.5-flash-lite', 'models/gemini-3.5-flash-lite'];
+// OpenRouter configuration (model and API key loaded from environment)
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY || null;
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || process.env.GEMINI_MODEL || 'openai/gpt-4o-mini';
+const OPENROUTER_FALLBACK_MODELS = process.env.OPENROUTER_FALLBACK_MODELS
+  ? process.env.OPENROUTER_FALLBACK_MODELS.split(',').map(s => s.trim()).filter(Boolean)
+  : (process.env.GEMINI_FALLBACK_MODELS || 'openai/gpt-4o-mini,deepseek/deepseek-chat-v3.1').split(',').map(s => s.trim()).filter(Boolean);
 
 const TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL || null;
 const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN || null;
@@ -348,8 +348,8 @@ async function insertWeeklyMetric(payload) {
 }
 
 async function generateAiNarrative(payload) {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY not configured. Set GEMINI_API_KEY in your .env to enable AI rewriting.');
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY not configured. Set OPENROUTER_API_KEY in your .env to enable AI rewriting.');
   }
 
   const promptBase = `You are an expert technical writer. Re-write these raw SQA weekly report sections into concise, professional executive-summary style text. Return a JSON object with these fields exactly: {"summary","important","notes","announcement","next_week_focus"} where each value is a short polished paragraph. Input JSON follows.\n\n`;
@@ -361,60 +361,46 @@ async function generateAiNarrative(payload) {
     next_week_focus: payload.next_week_focus || ''
   });
 
-  const modelsToTry = [GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS];
+  const modelsToTry = [OPENROUTER_MODEL, ...OPENROUTER_FALLBACK_MODELS];
 
   async function attemptModel(modelName) {
     const prompt = promptBase + inputJson;
-    const url = `https://generativelanguage.googleapis.com/v1/${modelName}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+    const url = 'https://openrouter.ai/api/v1/chat/completions';
     const body = {
-      contents: [ { role: 'user', parts: [{ text: prompt }] } ],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 800 }
+      model: modelName,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.2,
+      max_tokens: 800,
     };
 
     const resp = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'http://localhost:3000',
+        'X-Title': 'Weekly Report App',
+      },
       body: JSON.stringify(body),
     });
 
     if (!resp.ok) {
       let errText;
       try { errText = JSON.stringify(await resp.json()); } catch (e) { errText = await resp.text(); }
-      const err = new Error(`Gemini model ${modelName} request failed with status ${resp.status}: ${errText}`);
+      const err = new Error(`OpenRouter model ${modelName} request failed with status ${resp.status}: ${errText}`);
       err.status = resp.status;
       throw err;
     }
 
     const data = await resp.json();
-
-    // extract generated text
-    let generatedText = '';
-    try {
-      if (data.candidates && data.candidates[0]) {
-        const cand = data.candidates[0];
-        if (cand.content) {
-          const parts = Array.isArray(cand.content) ? cand.content.flatMap(c => c.parts || []) : (cand.content.parts || []);
-          generatedText = parts.map(p => p.text || p).join('\n');
-        } else if (cand.output && cand.output[0] && cand.output[0].content) {
-          generatedText = cand.output[0].content.map(c => c.text || '').join('\n');
-        } else if (cand.output && typeof cand.output === 'string') {
-          generatedText = cand.output;
-        }
-      } else if (data.output && Array.isArray(data.output) && data.output[0] && data.output[0].content) {
-        generatedText = data.output[0].content.map(c => c.text || '').join('\n');
-      }
-    } catch (e) {
-      generatedText = '';
-    }
-
+    const generatedText = data?.choices?.[0]?.message?.content || '';
     return { model: modelName, text: generatedText };
   }
 
   let lastError = null;
   for (const model of modelsToTry) {
     try {
-      const { model: usedModel, text } = await attemptModel(model);
-      // Try parse JSON from the returned text
+      const { text } = await attemptModel(model);
       let parsed = null;
       try { parsed = JSON.parse(text.trim()); } catch (e) {
         const match = text.match(/\{[\s\S]*\}/);
@@ -433,7 +419,6 @@ async function generateAiNarrative(payload) {
         };
       }
 
-      // Not JSON — return the full text into summary field
       return {
         tested_this_week: text || payload.tested_this_week,
         for_dev: payload.for_dev,
@@ -443,19 +428,16 @@ async function generateAiNarrative(payload) {
       };
     } catch (err) {
       lastError = err;
-      // If retriable status (503, 429, 502, 504) try next model, else break and rethrow
       const status = err && err.status ? Number(err.status) : null;
       if (status && [429, 503, 502, 504, 404].includes(status)) {
         console.warn(`Model ${model} failed with retriable status ${status}, trying next fallback if any.`);
         continue;
       }
-      // non-retriable — rethrow
       throw err;
     }
   }
 
-  // all models failed
-  const finalErr = new Error(`All Gemini models failed. Last error: ${lastError ? lastError.message : 'unknown'}`);
+  const finalErr = new Error(`All OpenRouter models failed. Last error: ${lastError ? lastError.message : 'unknown'}`);
   finalErr.cause = lastError;
   throw finalErr;
 }
