@@ -36,6 +36,7 @@
       fieldset { border: 1px solid #d8e1ec; border-radius: 10px; padding: 16px; background: #fcfdff; }
       legend { font-weight: 700; color: var(--navy); padding: 0 8px; }
       .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .stack { display: flex; flex-direction: column; gap: 16px; }
       .field { display: flex; flex-direction: column; gap: 6px; }
       .field label { font-weight: 600; }
       input, textarea, select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; font: inherit; }
@@ -59,52 +60,54 @@
         <p>Create a polished weekly executive summary PDF and keep the metrics in a local history.</p>
         <form id="report-form">
           <fieldset>
-            <legend>Core Metrics</legend>
+            <legend>Issue Metrics</legend>
             <div class="grid">
-              <div class="field"><label>Total Issues Reported</label><input name="total_issues" type="number" value="57" /></div>
-              <div class="field"><label>Critical / High</label><input name="critical_high" type="number" value="37" /></div>
-              <div class="field"><label>In Progress</label><input name="in_progress" type="number" value="4" /></div>
-              <div class="field"><label>Resolved This Week</label><input name="resolved" type="number" value="58" /></div>
-              <div class="field"><label>Pending</label><input name="pending" type="number" value="55" /></div>
-              <div class="field"><label>Avg Resolution Time — Critical (hrs)</label><input name="avg_res_critical_hrs" type="number" step="0.1" value="3" /></div>
-              <div class="field"><label>Avg Resolution Time — High (hrs)</label><input name="avg_res_high_hrs" type="number" step="0.1" value="5" /></div>
+              <div class="field"><label>Total Issues Reported</label><input name="total_issues" type="number" placeholder="57" /></div>
+              <div class="field"><label>Critical / High</label><input name="critical_high" type="number" placeholder="37" /></div>
+              <div class="field"><label>In Progress</label><input name="in_progress" type="number" placeholder="4" /></div>
+              <div class="field"><label>Resolved This Week</label><input name="resolved" type="number" placeholder="58" /></div>
+              <div class="field"><label>Pending</label><input name="pending" type="number" placeholder="55" /></div>
+              <div class="field"><label>Avg Resolution Time — Critical (hrs)</label><input name="avg_res_critical_hrs" type="number" step="0.1" placeholder="3" /></div>
+              <div class="field"><label>Avg Resolution Time — High (hrs)</label><input name="avg_res_high_hrs" type="number" step="0.1" placeholder="5" /></div>
             </div>
           </fieldset>
 
           <fieldset>
-            <legend>Metadata</legend>
+            <legend>Report Details</legend>
             <div class="grid">
-              <div class="field"><label>Prepared By</label><input name="prepared_by" value="MD ABDUL MOKADDES" required /></div>
-              <div class="field"><label>Project / Module</label><input name="project_module" value="TAHWEEL" required /></div>
-              <div class="field"><label>Report Date</label><input name="report_date" type="date" value="2026-07-04" required /></div>
-              <div class="field"><label>Submitted To</label><input name="submitted_to" value="@email" required /></div>
+              <div class="field"><label>Prepared By</label><input name="prepared_by" placeholder="MD ABDUL MOKADDES" required /></div>
+              <div class="field"><label>Project / Module</label><input name="project_module" placeholder="TAHWEEL" required /></div>
+              <div class="field"><label>Report Date</label><input name="report_date" type="date" required /></div>
+              <div class="field"><label>Submitted To</label><input name="submitted_to" placeholder="name@email.com" required /></div>
             </div>
           </fieldset>
 
           <fieldset>
             <legend>Collaboration Feedback</legend>
             <div class="grid">
-              <div class="field"><label>Communication Clarity</label><input name="comm_clarity_rating" value="3/5" required /></div>
-              <div class="field"><label>SLA</label><input name="comm_clarity_sla" value="Average" required /></div>
-              <div class="field"><label>Responsiveness to Bug Reports</label><input name="responsiveness_rating" value="4/5" required /></div>
-              <div class="field"><label>SLA</label><input name="responsiveness_sla" value="Met" required /></div>
-              <div class="field"><label>Support During Testing</label><input name="support_testing_rating" value="3/5" required /></div>
-              <div class="field"><label>SLA</label><input name="support_testing_sla" value="Average" required /></div>
-              <div class="field"><label>Fix Turnaround Time</label><input name="fix_turnaround_rating" value="4/5" required /></div>
-              <div class="field"><label>SLA</label><input name="fix_turnaround_sla" value="Met" required /></div>
+              <div class="field"><label>Communication Clarity</label><input name="comm_clarity_rating" placeholder="3/5" required /></div>
+              <div class="field"><label>SLA</label><input name="comm_clarity_sla" placeholder="Average" required /></div>
+              <div class="field"><label>Responsiveness to Bug Reports</label><input name="responsiveness_rating" placeholder="4/5" required /></div>
+              <div class="field"><label>SLA</label><input name="responsiveness_sla" placeholder="Met" required /></div>
+              <div class="field"><label>Support During Testing</label><input name="support_testing_rating" placeholder="3/5" required /></div>
+              <div class="field"><label>SLA</label><input name="support_testing_sla" placeholder="Average" required /></div>
+              <div class="field"><label>Fix Turnaround Time</label><input name="fix_turnaround_rating" placeholder="4/5" required /></div>
+              <div class="field"><label>SLA</label><input name="fix_turnaround_sla" placeholder="Met" required /></div>
             </div>
           </fieldset>
 
           <fieldset>
-            <legend>Executive Summary Content</legend>
-            <div class="field"><label>Tested This Week</label><textarea name="tested_this_week" required>PIN Code restriction, Tahweel Mall, T-Football, Tahweel Boy, Security Check on Tahweel Boy &amp; T-Football, Kingdom Market, Account Type Limit, Agency Security Update, My Faatoorah.</textarea></div>
-            <div class="field"><label>For Dev (must-follow points)</label><textarea name="for_dev" required>1. When discussing about any feature SQA should be present.
+  <legend>Executive Summary Content</legend>
+  <div class="stack">
+    <div class="field"><label>Tested This Week</label><textarea name="tested_this_week" required placeholder="PIN Code restriction, Tahweel Mall, T-Football, Tahweel Boy, Security Check on Tahweel Boy &amp; T-Football, Kingdom Market, Account Type Limit, Agency Security Update, My Faatoorah."></textarea></div>
+    <div class="field"><label>For Dev (must-follow points)</label><textarea name="for_dev" required placeholder="1. When discussing about any feature SQA should be present.
 2. They should start writing solution plans first and then move into implementation.
-3. They should share API documentation for each feature separately.</textarea></div>
-            <div class="field"><label>Low-workload activities (optional)</label><textarea name="low_workload_activities"></textarea></div>
-            <div class="field"><label>Announcement (optional)</label><textarea name="announcement"></textarea></div>
-            <div class="field"><label>Next Week Focus</label><textarea name="next_week_focus" required>Account Type Limit, My Faatoorah, Security check on Tahweel Mall, Tahweel Mall, Tahweel Rewards</textarea></div>
-          </fieldset>
+3. They should share API documentation for each feature separately."></textarea></div>
+    <div class="field"><label>Low-workload activities (optional)</label><textarea name="low_workload_activities" placeholder="Optional notes on lighter-effort tasks completed this week"></textarea></div>
+    <div class="field"><label>Announcement (optional)</label><textarea name="announcement" placeholder="Optional announcement for this week's report"></textarea></div>
+    <div class="field"><label>Next Week Focus</label><textarea name="next_week_focus" required placeholder="Account Type Limit, My Faatoorah, Security check on Tahweel Mall, Tahweel Mall, Tahweel Rewards"></textarea></div>
+  </div>
+</fieldset>
 
           <div class="actions">
             <button type="submit">Generate Report</button>
